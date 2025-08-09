@@ -35,7 +35,7 @@
     <div class="container mx-auto p-4 md:p-8">
         <header class="text-center mb-8">
             <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Observatorio de Redes Interdisciplinarias</h1>
-            <p class="mt-2 text-lg text-gray-600">Visualiza colaboraciones entre autores, disciplinas, laboratorios y conceptos.</p>
+            <p class="mt-2 text-lg text-gray-600">Visualiza colaboraciones entre autores, disciplinas y laboratorios.</p>
         </header>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -48,7 +48,6 @@
                 <textarea id="dataInput" class="w-full h-80 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                 placeholder="Nombre paper: Título del Paper 1
 Disciplinas presentes: Disciplina A, Disciplina B
-Palabras clave: Concepto X, Concepto Y
 Autores: Autor 1, Autor 2
 Laboratorio: L1"
                 ></textarea>
@@ -68,10 +67,6 @@ Laboratorio: L1"
                     <div class="flex items-center">
                         <div class="w-5 h-5 rounded-full bg-blue-500 border-2 border-blue-700 mr-2"></div>
                         <span>Disciplinas</span>
-                    </div>
-                    <div class="flex items-center">
-                        <div class="w-5 h-5 bg-green-500 border-2 border-green-700 mr-2"></div>
-                        <span>Palabras Clave</span>
                     </div>
                      <div class="flex items-center">
                         <div class="w-5 h-5 rotate-45 bg-amber-500 border-2 border-amber-700 mr-2"></div>
@@ -106,10 +101,10 @@ Laboratorio: L1"
                     return;
                 }
                 
-                // 1. Parsear los datos
+                // 1. Parsear los datos (sin Palabras Clave)
                 const entries = rawData.split(/\n\s*\n/);
                 const papers = entries.map(entry => {
-                    const paperData = { disciplines: [], keywords: [], authors: [], lab: null };
+                    const paperData = { disciplines: [], authors: [], lab: null };
                     entry.split('\n').forEach(line => {
                         const parts = line.split(':');
                         if (parts.length < 2) return;
@@ -117,7 +112,6 @@ Laboratorio: L1"
                         const value = parts.slice(1).join(':').trim();
                         if (key.startsWith('nombre paper')) paperData.name = value;
                         else if (key.startsWith('disciplinas')) paperData.disciplines = value.split(',').map(d => d.trim()).filter(Boolean);
-                        else if (key.startsWith('palabras clave')) paperData.keywords = value.split(',').map(k => k.trim()).filter(Boolean);
                         else if (key.startsWith('autores')) paperData.authors = value.split(',').map(a => a.trim()).filter(Boolean);
                         else if (key.startsWith('laboratorio')) paperData.lab = value.trim();
                     });
@@ -126,23 +120,20 @@ Laboratorio: L1"
 
                 // 2. Procesar para la red
                 const allDisciplines = new Set();
-                const allKeywords = new Set();
                 const allAuthors = new Set();
                 const allLabs = new Set();
                 
                 papers.forEach(p => {
                     p.disciplines.forEach(d => allDisciplines.add(d));
-                    p.keywords.forEach(k => allKeywords.add(k));
                     p.authors.forEach(a => allAuthors.add(a));
                     if (p.lab) allLabs.add(p.lab);
                 });
 
                 const disciplineNodes = Array.from(allDisciplines).map(d => ({ id: `d_${d}`, label: d, shape: 'dot', size: 18, color: { background: '#3b82f6', border: '#1e40af' } }));
-                const keywordNodes = Array.from(allKeywords).map(k => ({ id: `k_${k}`, label: k, shape: 'square', size: 14, color: { background: '#10b981', border: '#047857' } }));
                 const authorNodes = Array.from(allAuthors).map(a => ({ id: `a_${a}`, label: a, shape: 'dot', size: 22, color: { background: '#ef4444', border: '#b91c1c' } }));
                 const labNodes = Array.from(allLabs).map(l => ({ id: `l_${l}`, label: l, shape: 'diamond', size: 28, color: { background: '#f59e0b', border: '#b45309' } }));
 
-                const nodes = [...authorNodes, ...disciplineNodes, ...keywordNodes, ...labNodes];
+                const nodes = [...authorNodes, ...disciplineNodes, ...labNodes];
                 const edges = [];
                 const coAuthorship = {};
                 const disciplineCollab = {};
@@ -159,10 +150,9 @@ Laboratorio: L1"
                         p.disciplines.forEach(disc => authorDisciplines.get(author).add(disc));
                     });
 
-                    // Conexiones autor -> disciplina y autor -> keyword
+                    // Conexiones autor -> disciplina
                     p.authors.forEach(author => {
                         p.disciplines.forEach(disc => edges.push({ from: `a_${author}`, to: `d_${disc}`, dashes: true, color: '#fca5a5', length: 250 }));
-                        p.keywords.forEach(keyw => edges.push({ from: `a_${author}`, to: `k_${keyw}`, dashes: true, color: '#a7f3d0', length: 250 }));
                     });
 
                     // Co-autorías
@@ -204,14 +194,39 @@ Laboratorio: L1"
                 const options = {
                     physics: {
                         solver: 'forceAtlas2Based',
-                        forceAtlas2Based: { gravitationalConstant: -150, centralGravity: 0.01, springLength: 250, springConstant: 0.08, avoidOverlap: 1 },
-                        stabilization: { iterations: 300 }
+                        forceAtlas2Based: {
+                            gravitationalConstant: -100,
+                            centralGravity: 0.01,
+                            springLength: 250,
+                            damping: 0.4
+                        },
+                        stabilization: {
+                            iterations: 300 // Iteraciones para encontrar una buena posición
+                        }
                     },
-                    interaction: { hover: true, tooltipDelay: 200, navigationButtons: true },
-                    nodes: { borderWidth: 2, font: { color: '#ffffff', size: 12, strokeWidth: 2, strokeColor: 'rgba(0,0,0,0.8)' } },
-                    edges: { width: 1.5, smooth: { type: 'continuous' } }
+                    interaction: { 
+                        hover: true, 
+                        tooltipDelay: 200, 
+                        navigationButtons: true,
+                        dragNodes: true, // Permite arrastrar nodos
+                        dragView: true,  // Permite mover la vista
+                        zoomView: true   // Permite hacer zoom
+                    },
+                    nodes: { 
+                        borderWidth: 2, 
+                        font: { color: '#ffffff', size: 12, strokeWidth: 2, strokeColor: 'rgba(0,0,0,0.8)' } 
+                    },
+                    edges: { 
+                        width: 1.5,
+                        smooth: { type: 'continuous' }
+                    }
                 };
-                new vis.Network(networkContainer, data, options);
+                const network = new vis.Network(networkContainer, data, options);
+
+                // Evento para DESACTIVAR la física una vez que la red se ha estabilizado
+                network.on("stabilizationIterationsDone", function () {
+                  network.setOptions( { physics: false } );
+                });
 
                 // 4. Mostrar resultados del análisis
                 updateResults(coAuthorship, authorLabs, authorDisciplines, allDisciplines, disciplineCollab);
